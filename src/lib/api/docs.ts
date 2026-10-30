@@ -21,7 +21,7 @@ API keys are issued at registration and viewable/rotatable in the account endpoi
 | GET | /market/stocks | All listed securities. Filters: ?sector=Technology&search=quant |
 | GET | /market/stocks/{symbol} | Company profile: about, products & services, key statistics, 8 quarters of financials (EPS actual vs estimate, revenue), next report with consensus, sector peers, recent news |
 | GET | /market/quote?symbols=QNTM,NEURX | Latest quotes: bid/ask/sizes, last, day stats |
-| GET | /market/candles?symbol=QNTM&interval=5m&start=<ms>&end=<ms> | OHLCV bars. interval: 1m, 5m, 15m, 1h, 1d |
+| GET | /market/candles?symbol=QNTM&interval=5m&start=<ms>&end=<ms> | OHLCV bars. interval: 1m, 5m, 15m, 1h, 1d; or range: 1D, 5D, 1M, 3M, 6M, 1A, 5A, ALL |
 | GET | /market/orderbook?symbol=QNTM | Level-2 book: aggregated depth, 10 levels/side |
 | GET | /market/trades?symbol=QNTM&limit=50 | Time & sales tape |
 | GET | /market/movers | Top gainers / losers / most active |

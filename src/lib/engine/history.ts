@@ -23,8 +23,78 @@ export interface Candle {
   v: number
 }
 
-const HISTORY_DAYS = 380
+// The exchange opened for trading in 1996 — nothing lists before that.
+const EXCHANGE_OPEN_YEAR = 1996
 
+/**
+ * When the issuer listed on the Meridian Exchange: derived deterministically
+ * from the symbol. Operating companies list a few years after their founding;
+ * ETFs launched between 2004 and 2023; nothing predates the exchange itself.
+ * The daily history of every security runs from this date to today.
+ */
+export function listingDate(inst: Instrument): string {
+  const h = hashSeed('listed:' + inst.symbol)
+  let y = inst.kind === 'etf' ? 2004 + (h % 20) : inst.founded + 1 + (h % 14)
+  y = Math.max(EXCHANGE_OPEN_YEAR, Math.min(y, new Date().getUTCFullYear()))
+  const m = 1 + (h % 12)
+  const d = 1 + ((h >>> 4) % 28)
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+export function daysBetween(fromDate: string, toDate: string): number {
+  return Math.round((etDateToUtcMs(toDate) - etDateToUtcMs(fromDate)) / 86400000)
+}
+
+/**
+ * Build the full synthetic daily history of a security, from its listing date
+ * through `endDate` (yesterday), with the final close = anchor. Deterministic
+ * for a given (symbol, anchor, endDate): identical on every boot, which is
+ * what lets old bars be regenerated while recent real bars persist.
+ */
+export function buildDailyHistory(inst: Instrument, anchor: number, endDate: string): DailyBar[] {
+  const n = Math.max(2, daysBetween(listingDate(inst), endDate) + 1)
+  const rets = genReturnStream(inst, n)
+  const volDay = inst.volAnn / 100 / Math.sqrt(252)
+  const vRng = new Rng('volhist:' + inst.symbol)
+  const gapRng = new Rng('gaps:' + inst.symbol)
+
+  // Long-run growth target: the name compounds at a symbol-specific drift from
+  // its listing to today, so multi-decade charts show eras, not random noise.
+  const years = Math.max(0.5, n / 365.25)
+  const cagr = 0.05 + (hashSeed('cagr:' + inst.symbol) % 90) / 1000 // 5%–14% per year
+  const targetLog = cagr * years
+  const ipoPrice = Math.max(0.5, anchor / Math.exp(targetLog))
+
+  // forward log path, linearly corrected so it ends exactly at `anchor`
+  const cum: number[] = [0]
+  for (let i = 0; i < n; i++) cum.push(cum[i] + rets[i])
+  const drift = (targetLog - cum[n]) / n
+  const closes: number[] = []
+  for (let i = 1; i <= n; i++) closes.push(ipoPrice * Math.exp(cum[i] + drift * i))
+
+  const bars: DailyBar[] = []
+  for (let i = 0; i < n; i++) {
+    const c = closes[i]
+    const prevC = i === 0 ? ipoPrice : closes[i - 1]
+    const gap = Math.exp(gapRng.norm(0, volDay * 0.35))
+    const o = prevC * gap
+    const range1 = Math.abs(vRng.gauss()) * volDay * 0.85 + volDay * 0.25
+    const skew = vRng.gauss() * volDay * 0.4
+    const h = Math.max(o, c) * (1 + range1 * 0.6) + skew * c
+    const l = Math.min(o, c) * (1 - range1 * 0.6) + skew * c
+    const v = Math.round(inst.avgVol * vRng.lognorm(0, 0.42) * (0.75 + 0.5 * Math.abs(rets[i]) / (volDay + 1e-9)))
+    const date = shiftDate(endDate, -(n - 1 - i))
+    bars.push({
+      date,
+      o: roundPx(Math.max(0.5, o)),
+      h: roundPx(Math.max(h, Math.max(o, c))),
+      l: roundPx(Math.max(0.4, Math.min(l, Math.min(o, c)))),
+      c: roundPx(Math.max(0.4, c)),
+      v,
+    })
+  }
+  return bars
+}
 // Fixed seed streams so the *shape* of history is identical every boot.
 const MARKET_SEED = 777001
 const sectorSeeds = new Map<string, number>()
@@ -60,53 +130,7 @@ function genReturnStream(inst: Instrument, n: number): number[] {
   return out
 }
 
-/**
- * Build full synthetic daily history ending at `endDate` (yesterday) with the
- * final close = anchor. Deterministic for a given (symbol, anchor, endDate).
- */
-export function buildDailyHistory(inst: Instrument, anchor: number, endDate: string, endDateShiftDays = 0): DailyBar[] {
-  const n = HISTORY_DAYS
-  const rets = genReturnStream(inst, n)
-  const volDay = inst.volAnn / 100 / Math.sqrt(252)
-  const vRng = new Rng('volhist:' + inst.symbol)
-  const gapRng = new Rng('gaps:' + inst.symbol)
-  const dateRng = new Rng('dates:' + inst.symbol)
-
-  // forward price path from a seed base
-  let p = inst.basePrice * 0.72
-  const closes: number[] = []
-  for (let i = 0; i < n; i++) {
-    p = p * Math.exp(rets[i])
-    closes.push(p)
-  }
-  // rescale so last close == anchor
-  const scale = anchor / closes[n - 1]
-  const bars: DailyBar[] = []
-  for (let i = 0; i < n; i++) {
-    const c = closes[i] * scale
-    const prevC = i === 0 ? c / Math.exp(rets[0]) : closes[i - 1] * scale
-    const gap = Math.exp(gapRng.norm(0, volDay * 0.35))
-    const o = prevC * gap
-    const range1 = Math.abs(vRng.gauss()) * volDay * 0.85 + volDay * 0.25
-    const skew = vRng.gauss() * volDay * 0.4
-    const h = Math.max(o, c) * (1 + range1 * 0.6) + skew * c
-    const l = Math.min(o, c) * (1 - range1 * 0.6) + skew * c
-    const v = Math.round(inst.avgVol * vRng.lognorm(0, 0.42) * (0.75 + 0.5 * Math.abs(rets[i]) / (volDay + 1e-9)))
-    const date = shiftDate(endDate, -(n - 1 - i) - endDateShiftDays)
-    bars.push({
-      date,
-      o: roundPx(Math.max(0.5, o)),
-      h: roundPx(Math.max(h, Math.max(o, c))),
-      l: roundPx(Math.max(0.4, Math.min(l, Math.min(o, c)))),
-      c: roundPx(c),
-      v,
-    })
-  }
-  void dateRng
-  return bars
-}
-
-function shiftDate(date: string, days: number): string {
+export function shiftDate(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number)
   const dt = new Date(Date.UTC(y, m - 1, d, 12))
   dt.setUTCDate(dt.getUTCDate() + days)

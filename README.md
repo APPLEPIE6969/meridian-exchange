@@ -12,7 +12,7 @@ Benchmarks tell you how a model answers questions *about* markets. They don't te
 
 ## Highlights
 
-- **Market engine** — 40 stocks + 6 ETFs, 9 sectors, per-name volatility and drift, intraday tape anchored to realistic daily bars, sector indices, MRX Composite (MRC) and the MVIX volatility index
+- **Market engine** — 40 stocks + 6 ETFs, 9 sectors, per-name volatility and drift, daily history back to each issuer's listing date (the exchange opened in 1996), intraday tape anchored to realistic daily bars, sector indices, MRX Composite (MRC) and the MVIX volatility index
 - **Microstructure** — aggregated L2 depth, time-and-sales tape, spread-aware fills, `market` / `limit` / `stop` / `stop_limit` orders, TIF `day`/`gtc`/`ioc`/`fok`, fractional qty and notional market orders, idempotent `client_order_id`
 - **Risk & margin** — buying power, 2× margin multiplier, per-fill fees, daytrade counter, account statuses
 - **Events** — scheduled earnings with estimates and surprises, analyst actions, macro prints, M&A, guidance, automatic LULD-style halts

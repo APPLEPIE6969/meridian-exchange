@@ -184,7 +184,7 @@ async function callTool(name, args) {
     case 'get_market_status': return mrx('GET', '/market/status')
     case 'list_securities': return mrx('GET', `/market/stocks?${new URLSearchParams(Object.entries(a).filter(([, v]) => v != null && v !== ''))}`)
     case 'get_quote': return mrx('GET', `/market/quote?symbols=${encodeURIComponent(String(a.symbols ?? ''))}`)
-    case 'get_candles': return mrx('GET', `/market/candles?symbol=${encodeURIComponent(a.symbol)}&timeframe=${encodeURIComponent(a.timeframe ?? '5m')}&limit=${encodeURIComponent(a.limit ?? 100)}`)
+    case 'get_candles': return mrx('GET', `/market/candles?symbol=${encodeURIComponent(a.symbol)}&interval=${encodeURIComponent(a.timeframe ?? '5m')}&limit=${encodeURIComponent(a.limit ?? 100)}`)
     case 'get_orderbook': return mrx('GET', `/market/orderbook?symbol=${encodeURIComponent(a.symbol)}`)
     case 'get_trades': return mrx('GET', `/market/trades?symbol=${encodeURIComponent(a.symbol)}&limit=${encodeURIComponent(a.limit ?? 50)}`)
     case 'get_movers': return mrx('GET', '/market/movers')

@@ -13,6 +13,7 @@ const INTERVALS = [
   { key: '15m', label: '15m', range: '1M' },
   { key: '1h', label: '1h', range: '3M' },
   { key: '1d', label: '1D', range: '1A' },
+  { key: '1d', label: 'ALL', range: 'ALL' },
 ] as const
 
 interface Bar { t: number; o: number; h: number; l: number; c: number; v: number }
@@ -20,7 +21,7 @@ interface Bar { t: number; o: number; h: number; l: number; c: number; v: number
 export function ChartPanel() {
   const selected = useTerminal((s) => s.selected)
   const quotes = useTerminal((s) => s.quotes)
-  const [interval, setIntervalKey] = useState<(typeof INTERVALS)[number]['key']>('5m')
+  const [tf, setTf] = useState(1) // index into INTERVALS — default 5m / 5D
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -92,10 +93,11 @@ export function ChartPanel() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const cfg = INTERVALS.find((i) => i.key === interval)!
+      const cfg = INTERVALS[tf]
+      chartRef.current?.applyOptions({ timeScale: { timeVisible: cfg.key !== '1d' } })
       setLoading(true)
       try {
-        const data = await api.get<{ bars: Bar[] }>(`/api/v1/market/candles?symbol=${selected}&interval=${interval}&range=${cfg.range}&limit=900`)
+        const data = await api.get<{ bars: Bar[] }>(`/api/v1/market/candles?symbol=${selected}&interval=${cfg.key}&range=${cfg.range}&limit=${cfg.range === 'ALL' ? 20000 : 900}`)
         if (!cancelled) {
           // lightweight-charts requires strictly ascending, unique times — merge
           // any duplicate buckets defensively (live + synthetic overlap, etc.)
@@ -120,7 +122,7 @@ export function ChartPanel() {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [selected, interval])
+  }, [selected, tf])
 
   // push bars into series
   useEffect(() => {
@@ -194,12 +196,12 @@ export function ChartPanel() {
 
       {/* interval buttons */}
       <div className="flex items-center gap-1 border-b border-[#1e2530] px-3 py-1.5">
-        {INTERVALS.map((i) => (
+        {INTERVALS.map((i, idx) => (
           <button
-            key={i.key}
-            onClick={() => setIntervalKey(i.key)}
+            key={`${i.key}-${i.range}`}
+            onClick={() => setTf(idx)}
             className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
-              interval === i.key ? 'bg-[#1e2530] text-[#f5a524]' : 'text-neutral-500 hover:text-neutral-200'
+              tf === idx ? 'bg-[#1e2530] text-[#f5a524]' : 'text-neutral-500 hover:text-neutral-200'
             }`}
           >
             {i.label}

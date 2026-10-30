@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { INSTRUMENTS, BY_SYMBOL, Instrument, Sector, SECTOR_TARGET_LEVELS, COMPOSITE_TARGET_LEVEL } from './universe'
 import { Rng, gaussLive, roundTo, clamp, hashSeed } from './rng'
-import { DailyBar, buildDailyHistory, synthIntraday, Candle } from './history'
+import { DailyBar, buildDailyHistory, synthIntraday, Candle, shiftDate } from './history'
 import { GeneratedNews, generateRandomEvent, makeEarningsNews, makeHaltNews } from './news'
 import { etNow, sessionOf, sessionVolMult, sessionVolNumMult, SESSION_LABEL, Session, roundPx, tickSize, dateShiftUtcMidnight, etDateToUtcMs } from './time'
 
@@ -121,6 +121,9 @@ const TICKS_PER_YEAR = 31_536_000
 const MAX_TAPE = 220
 
 const secRng = new Rng('mrx-session-seed')
+// Macro (market-wide) news drift: applied each tick then decayed, so the total
+// move converges to the headline's bps while every intermediate price prints.
+const MACRO_DECAY = 0.8
 
 export interface EngineHooks {
   onFill: (orderId: string, accountId: string, fill: FillPart, orderDone: boolean) => Promise<void>
@@ -165,9 +168,14 @@ export class MarketEngine {
       const anchor = saved?.prevClose && saved.price ? saved.price : inst.basePrice
       const prevClose = saved?.prevClose ?? inst.basePrice * (1 + (hashSeed(inst.symbol) % 100 - 50) / 5000)
       const savedDaily = snap?.daily?.[inst.symbol] ?? []
-      const daily = savedDaily.length >= 380
-        ? savedDaily
-        : buildDailyHistory(inst, savedDaily.length ? savedDaily[savedDaily.length - 1].c : prevClose, yesterday)
+      // History runs from each issuer's listing date to today. Older bars are
+      // regenerated deterministically (same seed every boot); the snapshot's
+      // recent real tail splices onto the regenerated head, so realized days
+      // are never rewritten and the tape never truncates across restarts.
+      const head = savedDaily.length
+        ? buildDailyHistory(inst, savedDaily[0].c, shiftDate(savedDaily[0].date, -1))
+        : buildDailyHistory(inst, prevClose, yesterday)
+      const daily = savedDaily.length ? head.concat(savedDaily) : head
       const st: SymbolState = {
         inst,
         price: saved?.price ?? anchor,
@@ -210,11 +218,9 @@ export class MarketEngine {
       this.sectorIndices = new Map(Object.entries(snap.sector ?? {}) as [Sector, IndexState][])
       this.mvix = snap.mvix?.level ?? 21.4
       this.mvixVarTick = snap.mvix?.varTick ?? 0
-      for (const inst of INSTRUMENTS) {
-        const st = this.states.get(inst.symbol)!
-        const saved = snap?.daily?.[inst.symbol] ?? []
-        if (saved.length >= 380) st.dailyBars = saved
-      }
+      // daily bars are already spliced (regenerated listing-era head + recent
+      // snapshot tail) inside the state constructor above — do NOT overwrite
+      // them here, or the deep history is lost on every snapshot boot.
     }
     const capSum = this.computeCapSum()
     this.compositeDivisor = capSum / (snap?.composite?.level ?? COMPOSITE_TARGET_LEVEL)
@@ -266,7 +272,7 @@ export class MarketEngine {
           dayLow: st.dayLow, volume: Math.round(st.volume), volVar: st.volVar, drift: st.drift,
           anchor: st.anchor, estEps: st.estEps, nextEarnings: st.nextEarnings,
         }
-        daily[sym] = st.dailyBars.slice(-380) // match HISTORY_DAYS so the tape never truncates across restarts
+        daily[sym] = st.dailyBars.slice(-380) // recent real tail; older bars regenerate deterministically from each listing
       }
       const data = {
         savedAt: new Date().toISOString(),
@@ -755,7 +761,9 @@ export class MarketEngine {
     const now = Date.now()
     for (const target of n.symbols) {
       if (target === '*') {
-        this.marketImpulse += (n.impactBps / 100) / 100
+        // Market-wide reaction spreads over the next ~15 ticks as a decaying
+        // drip so the tape traverses the move instead of gapping in one print.
+        this.marketImpulse += (n.impactBps / 100 / 100) * (1 - MACRO_DECAY)
         this.mvixVarTick += Math.pow(Math.abs(n.impactBps) / 100 / 100 / 900, 2) * 2e6
         for (const st of this.states.values()) {
           this.startImpulse(st, n.impactBps * 0.9, now)
@@ -871,7 +879,7 @@ export class MarketEngine {
     // market factor
     const mBase = 0.011 / Math.sqrt(TICKS_PER_YEAR)
     const rM = gaussLive() * mBase * volMult + this.marketImpulse
-    this.marketImpulse *= 0.25
+    this.marketImpulse *= MACRO_DECAY
 
     const sectorReturns = new Map<Sector, number>()
     for (const sec of this.sectorIndices.keys()) {

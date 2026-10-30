@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (!symbol) return fail(422, 'SYMBOL_REQUIRED', 'symbol query parameter is required.')
     if (!engine.quote(symbol)) return fail(404, 'SYMBOL_NOT_FOUND', `No security found for symbol '${symbol}'.`)
 
-    const interval = url.searchParams.get('interval') ?? '5m'
+    const interval = url.searchParams.get('interval') ?? url.searchParams.get('timeframe') ?? '5m'
     if (!INTERVALS[interval]) {
       return fail(422, 'INVALID_INTERVAL', "interval must be one of: 1m, 5m, 15m, 1h, 1d")
     }
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     let start = Number(url.searchParams.get('start') ?? 0)
     let end = Number(url.searchParams.get('end') ?? now)
     const range = url.searchParams.get('range')
-    const rangeMs: Record<string, number> = { '1D': 86400000, '5D': 5 * 86400000, '1M': 30 * 86400000, '3M': 90 * 86400000, '6M': 182 * 86400000, '1A': 365 * 86400000 }
+    const rangeMs: Record<string, number> = { '1D': 86400000, '5D': 5 * 86400000, '1M': 30 * 86400000, '3M': 90 * 86400000, '6M': 182 * 86400000, '1A': 365 * 86400000, '5A': 5 * 365 * 86400000, 'ALL': 40 * 365 * 86400000 }
     if (range && rangeMs[range]) {
       start = now - rangeMs[range]
       end = now
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     if (!end || end > now + 60000) end = now
     if (end <= start) return fail(422, 'INVALID_RANGE', 'end must be greater than start.')
 
-    const limit = Math.min(2000, Math.max(10, Number(url.searchParams.get('limit') ?? 900)))
+    const limit = Math.min(20000, Math.max(10, Number(url.searchParams.get('limit') ?? 900)))
     const bars = engine.getCandles(symbol, interval as '1m' | '5m' | '15m' | '1h' | '1d', start, end, limit)
     return ok({
       symbol,

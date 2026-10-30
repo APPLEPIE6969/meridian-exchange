@@ -65,3 +65,8 @@ prisma/*.db
 
 # keep the example env
 !.env.example
+
+# sandbox infrastructure (never publish)
+/.zscripts/
+/tests/
+/Caddyfile

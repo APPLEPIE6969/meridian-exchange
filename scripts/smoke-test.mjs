@@ -38,20 +38,20 @@ console.log('\n── Market Data ──')
   check('quote multi-symbol 200', status === 200 && json?.quotes?.length === 3, JSON.stringify(json).slice(0, 200))
   const q = json?.quotes?.[0]
   check('quote fields', q && q.bid > 0 && q.ask >= q.bid && q.volume >= 0 && typeof q.change_percent === 'number')
-  check('quote 52w range', q && q.week52_low <= q.last && q.last <= q.week52_high)
+  check('quote 52w range', q && q.week52_low <= q.last && q.last <= q.week52_high, q ? `last=${q.last} lo=${q.week52_low} hi=${q.week52_high}` : 'no quote')
 }
 {
   const { status, json } = await mdApi('/market/quote?symbols=BOGUS')
   check('quote unknown symbol 404', status === 404 && json?.error?.code === 'SYMBOL_NOT_FOUND', JSON.stringify(json))
 }
 {
-  const { status, json } = await mdApi('/market/candles?symbol=QNTM&timeframe=5m&limit=50')
+  const { status, json } = await mdApi('/market/candles?symbol=QNTM&interval=5m&limit=50')
   check('candles 5m', status === 200 && Array.isArray(json?.bars) && json.bars.length > 10, JSON.stringify(json).slice(0, 150))
   const c = json?.bars?.[0]
   check('candle OHLC valid', c && c.o > 0 && c.h >= c.l && c.h >= c.o && c.l <= c.o)
 }
 {
-  const { status, json } = await mdApi('/market/candles?symbol=QNTM&timeframe=1d&limit=120')
+  const { status, json } = await mdApi('/market/candles?symbol=QNTM&interval=1d&limit=120')
   check('candles 1d history', status === 200 && json?.bars?.length >= 100, `got ${json?.bars?.length}`)
 }
 {
