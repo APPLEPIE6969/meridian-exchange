@@ -1,0 +1,12 @@
+{
+  "name": "mrx-market-relay",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1"
+  }
+}

@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Meridian Exchange (MRX) — core data model ───────────────────────────────
+
+model Account {
+  id             String    @id @default(cuid())
+  accountNumber  String    @unique // e.g. MRX-91420387
+  email          String    @unique
+  name           String
+  passwordHash   String
+  apiKey         String    @unique // mer_live_xxx
+  cash           Float     @default(100000)
+  status         String    @default("ACTIVE") // ACTIVE | MARGIN_CALL | RESTRICTED
+  accountType    String    @default("margin")
+  multiplier     Int       @default(2)
+  daytradeCount  Int       @default(0)
+  handle         String    @unique // public leaderboard handle
+  lastEquity     Float     @default(100000)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  orders     Order[]
+  fills      Fill[]
+  positions  Position[]
+  testProfile TestProfile?
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  accountId String
+  symbol    String
+  qty       Float // negative = short
+  avgPrice  Float
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, symbol])
+}
+
+model Order {
+  id             String    @id @default(cuid())
+  clientOrderId  String?
+  accountId      String
+  symbol         String
+  side           String // buy | sell
+  type           String // market | limit | stop | stop_limit
+  qty            Float
+  notional       Float?
+  filledQty      Float     @default(0)
+  filledAvgPrice Float?
+  limitPrice     Float?
+  stopPrice      Float?
+  tif            String    @default("day") // day | gtc | ioc | fok
+  status         String    @default("new") // new | accepted | partially_filled | filled | canceled | expired | rejected
+  rejectReason   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  filledAt       DateTime?
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fills   Fill[]
+
+  @@index([accountId, status])
+  @@index([symbol, status])
+}
+
+model Fill {
+  id        String   @id @default(cuid())
+  orderId   String
+  accountId String
+  symbol    String
+  side      String
+  qty       Float
+  price     Float
+  fee       Float    @default(0)
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+}
+
+model NewsItem {
+  id        String   @id @default(cuid())
+  headline  String
+  body      String
+  source    String
+  kind      String // earnings | analyst | macro | product | regulatory | ma | guidance | general | halt
+  symbols   String // JSON array of affected symbols
+  sentiment Float // -1 .. 1
+  impactBps Float    @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model TestProfile {
+  id        String   @id @default(cuid())
+  accountId String   @unique
+  label     String   @unique // operator-facing profile name, e.g. "gpt5-momentum"
+  model     String   @default("") // model under test, e.g. "gpt-5.2"
+  notes     String   @default("")
+  leaderboardAlias String? // optional public leaderboard display name (operator-set, sanitized)
+  startingCash Float @default(100000)
+  createdAt DateTime @default(now())
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
