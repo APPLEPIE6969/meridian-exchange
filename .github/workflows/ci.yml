@@ -111,13 +111,13 @@ jobs:
           cd mini-services/market-relay
           npm install --no-audit --no-fund
           npx tsx index.ts &
+          relay_up=0
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3003/internal/broadcast -H 'Content-Type: application/json' -d '{"messages":[]}')
-            if [ "$code" = "200" ]; then echo "relay is up"; break; fi
+            code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3003/internal/broadcast -H 'Content-Type: application/json' -d '{"messages":[]}' || true)
+            if [ "$code" = "200" ]; then echo "relay is up"; relay_up=1; break; fi
             sleep 2
           done
-          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3003/internal/broadcast -H 'Content-Type: application/json' -d '{"messages":[]}')
-          [ "$code" = "200" ] || (echo "relay failed to boot" && exit 1)
+          [ "$relay_up" = "1" ] || (echo "relay failed to boot" && exit 1)
 
       - name: Smoke test (full trading lifecycle)
         run: node scripts/smoke-test.mjs
