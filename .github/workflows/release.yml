@@ -35,9 +35,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -134,7 +134,7 @@ jobs:
           ls -la
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Meridian Exchange ${{ github.ref_name }}
           body: |
@@ -144,7 +144,7 @@ jobs:
             - Full REST trading API (`/api/v1`), L2 order books, LULD halts, earnings engine, news wire, margin & fees, leaderboard
             - MCP adapter for Claude Desktop / Claude Code / Cursor
             - Socket.IO market-data relay for live terminal streaming
-            - Verified by the full CI matrix before publishing: typecheck · lint · build · 400 unit tests at 100% coverage · smoke / api-matrix / MCP / websocket conformance suites
+            - Verified by the full CI matrix before publishing: typecheck · lint · build · the full unit suite at enforced 100% coverage · smoke / api-matrix / MCP / websocket conformance suites
 
             ## Attachments
 
