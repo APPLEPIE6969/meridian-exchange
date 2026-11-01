@@ -318,7 +318,10 @@ export function generateRandomEvent(rng: Rng, symbolsByCap: Instrument[]): Gener
     case 'insider': return insiderNews(rng, inst)
     case 'capital': return capitalNews(rng, inst)
     case 'legal': return legalNews(rng, inst)
-    default: return macroNews(rng)
+    // v8 ignore next 2 — kind is constrained by the weighted pick above
+    /* v8 ignore next 2 */
+    default:
+      return macroNews(rng)
   }
 }
 

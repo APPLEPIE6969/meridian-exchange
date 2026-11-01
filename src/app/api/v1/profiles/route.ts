@@ -8,7 +8,7 @@
 // exchange. Nothing any profile key can observe references profiles, testing,
 // or simulation.
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ok, fail, preflight, errorResponse } from '@/lib/api/respond'
 import { getEngineReady } from '@/lib/engine'
 import { db } from '@/lib/db'

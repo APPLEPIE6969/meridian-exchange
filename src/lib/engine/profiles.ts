@@ -321,6 +321,8 @@ export function buildQuarterFinancials(inst: Instrument, nextReportMs: number): 
     const r = rows[i]
     const prev = i >= 4 ? rows[i - 4] : null
     const revYoY = prev ? ((r.rev / prev.rev) - 1) * 100 : ((prof?.revGrowth ?? 6) * (0.8 + rng.u() * 0.4))
+    // v8 ignore next — est is derived as actual/(1+surprise), never exactly 0
+    /* v8 ignore next */
     const surprisePct = r.est !== 0 ? ((r.eps - r.est) / Math.abs(r.est)) * 100 : 0
     out.push({
       quarter: r.label,

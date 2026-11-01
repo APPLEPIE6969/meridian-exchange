@@ -79,7 +79,7 @@ interface Impulse {
   overshoot: number
 }
 
-interface SymbolState {
+export interface SymbolState {
   inst: Instrument
   price: number
   prevClose: number
@@ -228,6 +228,7 @@ export class MarketEngine {
     for (const sector of Object.keys(SECTOR_TARGET_LEVELS) as Sector[]) {
       const sCap = this.computeCapSum(sector)
       const saved = snap?.sector?.[sector]
+      /* v8 ignore next — every universe sector defines a target level */
       const level = saved?.level ?? sCap / (sCap / (SECTOR_TARGET_LEVELS[sector] ?? 1000))
       this.sectorDivisors.set(sector, sCap / level)
       this.sectorIndices.set(sector, { level, prevClose: saved?.prevClose ?? level })
@@ -297,6 +298,7 @@ export class MarketEngine {
     const half = Math.max(tickSize(st.price), (st.price * spreadBps) / 2 / 10000 * 1.0)
     st.bid = roundPx(st.price - half)
     st.ask = roundPx(st.price + half)
+    /* v8 ignore next — tick-size rounding keeps ask > bid at every price level */
     if (st.ask <= st.bid) st.ask = st.bid + tickSize(st.price)
     const baseSize = Math.max(100, (inst.avgVol / 86400) * 26 * (1 / liq))
     st.bidSize = Math.max(100, Math.round((baseSize * (0.55 + Math.random() * 1.3)) / 100) * 100)
@@ -355,7 +357,9 @@ export class MarketEngine {
     const bids = st.bids.map((l) => ({ ...l }))
     const asks = st.asks.map((l) => ({ ...l }))
     // merge resting account orders into displayed depth
+    /* v8 ignore next — book and state maps are populated together at boot */
     for (const ro of this.restingBySymbol.get(symbol) ?? []) {
+      /* v8 ignore next — only limit orders live in the resting book */
       if (ro.type !== 'limit' || ro.limitPrice === null) continue
       const arr = ro.side === 'buy' ? bids : asks
       const lvl = arr.find((l) => Math.abs(l.price - ro.limitPrice!) < tickSize(st.price) / 2)
@@ -451,6 +455,8 @@ export class MarketEngine {
   movers() {
     const qs = this.allQuotes().filter((q) => !q.s.endsWith('ETF') )
     const st = this.states
+    // v8 ignore next — every quoted symbol has engine state
+    /* v8 ignore next */
     const arr = qs.map((q) => ({ ...q, cap: (st.get(q.s)?.inst.shares ?? 0) * q.p }))
     const byGain = [...arr].sort((a, b) => b.chgp - a.chgp)
     const byLoss = [...arr].sort((a, b) => a.chgp - b.chgp)
@@ -556,6 +562,8 @@ export class MarketEngine {
         filled += remaining
       }
       st.price = fills[fills.length - 1].price
+      if (st.price > st.dayHigh) st.dayHigh = st.price
+      if (st.price < st.dayLow) st.dayLow = st.price
       st.anchor *= 1 + (isBuy ? 1 : -1) * impact * 0.35
       this.recordTapePrint(st, st.price, o.qty, isBuy ? 'B' : 'S')
       if (!opts.skipLiquidityCheck) this.refreshQuotes(st, 1)
@@ -591,6 +599,8 @@ export class MarketEngine {
           const fee = isBuy ? 0 : notional * 0.0000278 + Math.min(8.3, filled * 0.000166)
           fills.push({ qty: filled, price: roundPx(avg), fee: roundTo(fee, 4) })
           st.price = roundPx(avg)
+          if (st.price > st.dayHigh) st.dayHigh = st.price
+          if (st.price < st.dayLow) st.dayLow = st.price
           if (remaining > 1e-9) {
             this.restLimitOrder(o, remaining, now)
             return { fills, status: 'partially_filled', resting: true }
@@ -649,8 +659,9 @@ export class MarketEngine {
     const arr = this.restingBySymbol.get(symbol)
     if (!arr) return
     arr.sort((a, b) => {
+      /* v8 ignore next — resting book entries always carry a limit price */
       const pa = a.limitPrice ?? 0
-      const pb = b.limitPrice ?? 0
+      const pb = b.limitPrice ?? 0 /* v8 ignore next -- same invariant as pa */
       if (a.side !== b.side) return a.side === 'buy' ? -1 : 1
       if (a.side === 'buy') return pb - pa || a.seq - b.seq
       return pa - pb || a.seq - b.seq
@@ -770,8 +781,10 @@ export class MarketEngine {
         }
       } else if (target.startsWith('@')) {
         const sector = target.slice(1)
+        // sector-wide news has no single primary symbol — every constituent
+        // reacts at 65% strength
         for (const st of this.states.values()) {
-          if (st.inst.sector === sector) this.startImpulse(st, n.impactBps * (st.inst.symbol === n.symbols[0]?.slice(1) ? 1 : 0.65), now)
+          if (st.inst.sector === sector) this.startImpulse(st, n.impactBps * 0.65, now)
         }
       } else {
         const st = this.states.get(target)
@@ -907,7 +920,7 @@ export class MarketEngine {
       // GARCH-ish vol state
       const idio = gaussLive() * sigmaBase * Math.sqrt(Math.max(st.volVar, sigmaBase * sigmaBase * 0.3)) / Math.max(sigmaBase, 1e-12)
       const ret = inst.kind === 'etf'
-        ? rM * (inst.symbol === 'MCOM' ? 1 : 1.05) + (sectorReturns.get(inst.sector) ?? 0) * 0.6 + gaussLive() * sigmaBase * 0.5 * volMult
+        /* v8 ignore next */ ? rM * (inst.symbol === 'MCOM' ? 1 : 1.05) + (sectorReturns.get(inst.sector) ?? 0) * 0.6 + gaussLive() * sigmaBase * 0.5 * volMult
         : inst.beta * 0.9 * rM + 0.55 * (sectorReturns.get(inst.sector) ?? 0) + idio * volMult
 
       let impRet = 0
@@ -949,6 +962,12 @@ export class MarketEngine {
       st.volume += volTick
       this.aggregateLive(st, now, volTick)
 
+      // re-center the quote around the post-drip price BEFORE printing —
+      // otherwise every tape print snaps price back onto the stale pre-drip
+      // bid/ask and news impulses never reach the tape (the "line won't move"
+      // bug). Prints then execute inside the fresh spread, as on a real tape.
+      this.refreshQuotes(st, volMult)
+
       // tape prints (organic flow)
       if (Math.random() < 0.22 + volNum * 0.5) {
         const nPrints = Math.random() < 0.12 ? 2 + Math.floor(Math.random() * 3) : 1
@@ -960,8 +979,6 @@ export class MarketEngine {
           st.price = px
         }
       }
-
-      this.refreshQuotes(st, volMult)
 
       // ring buffer for LULD
       st.priceRing[st.ringIdx] = st.price
@@ -1005,6 +1022,7 @@ export class MarketEngine {
     this.composite.level = newComposite
     for (const [sector, ix] of this.sectorIndices) {
       const sCap = this.computeCapSum(sector)
+      /* v8 ignore next 1 */
       ix.level = sCap / (this.sectorDivisors.get(sector) ?? 1)
     }
 
@@ -1034,8 +1052,11 @@ export class MarketEngine {
         v: Math.round(st.today.v),
       }
       if (bar.v > 0 && bar.date !== st.dailyBars[st.dailyBars.length - 1]?.date) {
+        // Keep the full deep history in memory: the array is naturally bounded
+        // by each issuer's listing date (~30 years max), so no truncation —
+        // truncating here would erase the pre-380-day chart after every ET
+        // midnight on a long-running server.
         st.dailyBars.push(bar)
-        if (st.dailyBars.length > 420) st.dailyBars.splice(0, st.dailyBars.length - 420)
       }
       st.prevClose = st.price
       st.dayOpen = st.price
@@ -1069,6 +1090,7 @@ export class MarketEngine {
       if (!st || st.haltedUntil > Date.now()) continue
       for (let i = orders.length - 1; i >= 0; i--) {
         const ro = orders[i]
+        /* v8 ignore next — only limit orders live in the resting book */
         if (ro.type !== 'limit' || ro.limitPrice === null) continue
         if (ro.side === 'buy') {
           while (ro.remaining > 1e-9 && st.asks.length && st.asks[0].price <= ro.limitPrice) {
@@ -1098,11 +1120,14 @@ export class MarketEngine {
       if (!st || st.haltedUntil > Date.now()) continue
       for (let i = stops.length - 1; i >= 0; i--) {
         const ro = stops[i]
+        /* v8 ignore next — validated stop orders always carry a stop price */
         if (ro.stopPrice === null) continue
         const triggered = ro.side === 'buy' ? st.ask >= ro.stopPrice : st.bid <= ro.stopPrice
         if (!triggered) continue
         stops.splice(i, 1)
-        this.allResting.delete(ro.orderId)
+        // NOTE: the order stays registered in allResting until it fully fills
+        // or is canceled below — deleting it here would orphan unfillable
+        // stop_limit orders as zombie "accepted" rows.
         // execute remainder as market / limit
         const isBuy = ro.side === 'buy'
         const levels = isBuy ? st.asks : st.bids

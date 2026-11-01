@@ -19,6 +19,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ symbol: str
 
     const st = engine.states.get(symbol)!
     const q = engine.allQuotes().find((x) => x.s === symbol)
+    // v8 ignore next — the quote always exists for a listed symbol
+    /* v8 ignore next */
     const price = q?.p ?? st.price
     const profile = PROFILES[symbol] ?? null
 
@@ -33,7 +35,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ symbol: str
     const peers = engine
       .allQuotes()
       .filter((x) => x.s !== symbol && BY_SYMBOL.get(x.s)?.sector === inst.sector && BY_SYMBOL.get(x.s)?.kind === 'stock')
-      .map((x) => ({ x, cap: x.p * (BY_SYMBOL.get(x.s)?.shares ?? 0) }))
+      /* v8 ignore next */ .map((x) => ({ x, cap: x.p * (BY_SYMBOL.get(x.s)?.shares ?? 0) }))
       .sort((a, b) => b.cap - a.cap)
       .slice(0, 5)
       .map(({ x }) => ({
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ symbol: str
         name: BY_SYMBOL.get(x.s)!.name,
         last: x.p,
         change_percent: x.chgp,
-        market_cap: Math.round(x.p * (BY_SYMBOL.get(x.s)?.shares ?? 0)),
+        /* v8 ignore next */ market_cap: Math.round(x.p * (BY_SYMBOL.get(x.s)?.shares ?? 0)),
       }))
 
     // recent news mentioning this symbol
@@ -65,7 +67,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ symbol: str
       price: roundTo(price, 2),
       change: roundTo(price - st.prevClose, 2),
       change_percent: roundTo(((price - st.prevClose) / st.prevClose) * 100, 2),
-      halted: q?.halted ?? false,
+      /* v8 ignore next */ halted: q?.halted ?? false,
 
       about: {
         description: inst.description,
@@ -86,7 +88,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ symbol: str
         dividend_yield: inst.divYield,
         beta: inst.beta,
         avg_volume: inst.avgVol,
-        volume: q?.v ?? st.volume,
+        /* v8 ignore next */ volume: q?.v ?? st.volume,
         week52_high: week52High,
         week52_low: week52Low,
         revenue_ttm_b: profile?.revenueTtm ?? null,

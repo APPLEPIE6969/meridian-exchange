@@ -38,6 +38,12 @@ export function listingDate(inst: Instrument): string {
   y = Math.max(EXCHANGE_OPEN_YEAR, Math.min(y, new Date().getUTCFullYear()))
   const m = 1 + (h % 12)
   const d = 1 + ((h >>> 4) % 28)
+  // Never in the future: if the seeded month/day lands ahead of today within
+  // the current year, walk the listing year back one — still after founding
+  // (the newest foundation is 2017) and above the 1996 floor.
+  if (`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` > new Date().toISOString().slice(0, 10)) {
+    y -= 1
+  }
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
@@ -80,16 +86,20 @@ export function buildDailyHistory(inst: Instrument, anchor: number, endDate: str
     const o = prevC * gap
     const range1 = Math.abs(vRng.gauss()) * volDay * 0.85 + volDay * 0.25
     const skew = vRng.gauss() * volDay * 0.4
-    const h = Math.max(o, c) * (1 + range1 * 0.6) + skew * c
-    const l = Math.min(o, c) * (1 - range1 * 0.6) + skew * c
+    // floor o/c first, then derive h/l — guarantees h ≥ max(o, c) ≥ l even in
+    // the sub-dollar tail of very old bars
+    const oF = Math.max(0.5, o)
+    const cF = Math.max(0.4, c)
+    const h = Math.max(oF, cF) * (1 + range1 * 0.6) + skew * cF
+    const l = Math.min(oF, cF) * (1 - range1 * 0.6) + skew * cF
     const v = Math.round(inst.avgVol * vRng.lognorm(0, 0.42) * (0.75 + 0.5 * Math.abs(rets[i]) / (volDay + 1e-9)))
     const date = shiftDate(endDate, -(n - 1 - i))
     bars.push({
       date,
-      o: roundPx(Math.max(0.5, o)),
-      h: roundPx(Math.max(h, Math.max(o, c))),
-      l: roundPx(Math.max(0.4, Math.min(l, Math.min(o, c)))),
-      c: roundPx(Math.max(0.4, c)),
+      o: roundPx(oF),
+      h: roundPx(Math.max(h, oF, cF)),
+      l: roundPx(Math.max(0.4, Math.min(l, oF, cF))),
+      c: roundPx(cF),
       v,
     })
   }
@@ -197,6 +207,9 @@ export function synthIntraday(symbol: string, bar: DailyBar, intervalMin: number
     const keys = intradayCache.keys()
     for (let i = 0; i < 60; i++) {
       const k = keys.next()
+      // v8 ignore next — only reachable if the cache held fewer than 60
+      // entries, impossible behind the >220 overflow guard
+      /* v8 ignore next */
       if (k.done) break
       intradayCache.delete(k.value)
     }

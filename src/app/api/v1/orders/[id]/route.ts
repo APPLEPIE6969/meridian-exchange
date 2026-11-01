@@ -41,6 +41,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const account = await requireAccount(req)
     const { id } = await ctx.params
     const order = await cancelOrder(account.id, id)
+    /* v8 ignore next — cancelOrder returns a persisted row or throws */
     if (!order) return fail(404, 'ORDER_NOT_FOUND', 'Order not found.')
     return ok(orderView(order))
   } catch (e) {

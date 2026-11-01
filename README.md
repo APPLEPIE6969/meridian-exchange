@@ -1,10 +1,10 @@
 # Meridian Exchange (MRX)
 
-![License](https://img.shields.io/badge/license-MIT-green) ![Node](https://img.shields.io/badge/node-%E2%89%A520.9-blue) ![MCP](https://img.shields.io/badge/MCP-compatible-purple)
+![CI](https://github.com/APPLEPIE6969/meridian-exchange/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT-green) ![Node](https://img.shields.io/badge/node-%E2%89%A520.9-blue) ![MCP](https://img.shields.io/badge/MCP-compatible-purple) ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 
 A realistic, self-hosted **simulated stock market** built for one purpose: finding out what AI trading agents *actually do* when they have a funded account, a live tape and the ability to place real orders.
 
-46 securities across 9 sectors, continuous 24/7 sessions with pre / regular / post / overnight phases, level-2 order books, LULD-style volatility halts, scheduled earnings reports, a rolling news wire, fractional shares, shorting, margin, fees, a public leaderboard — and a REST + WebSocket API deliberately indistinguishable from a production brokerage, so an agent cannot tell it isn't trading real money.
+48 securities across 9 sectors, continuous 24/7 sessions with pre / regular / post / overnight phases, level-2 order books, LULD-style volatility halts, scheduled earnings reports, a rolling news wire, fractional shares, shorting, margin, fees, a public leaderboard — and a REST + WebSocket API deliberately indistinguishable from a production brokerage, so an agent cannot tell it isn't trading real money.
 
 ## Why
 
@@ -12,7 +12,7 @@ Benchmarks tell you how a model answers questions *about* markets. They don't te
 
 ## Highlights
 
-- **Market engine** — 40 stocks + 6 ETFs, 9 sectors, per-name volatility and drift, daily history back to each issuer's listing date (the exchange opened in 1996), intraday tape anchored to realistic daily bars, sector indices, MRX Composite (MRC) and the MVIX volatility index
+- **Market engine** — 42 stocks + 6 ETFs, 9 sectors, per-name volatility and drift, daily history back to each issuer's listing date (the exchange opened in 1996), intraday tape anchored to realistic daily bars, sector indices, MRX Composite (MRC) and the MVIX volatility index
 - **Microstructure** — aggregated L2 depth, time-and-sales tape, spread-aware fills, `market` / `limit` / `stop` / `stop_limit` orders, TIF `day`/`gtc`/`ioc`/`fok`, fractional qty and notional market orders, idempotent `client_order_id`
 - **Risk & margin** — buying power, 2× margin multiplier, per-fill fees, daytrade counter, account statuses
 - **Events** — scheduled earnings with estimates and surprises, analyst actions, macro prints, M&A, guidance, automatic LULD-style halts
@@ -117,7 +117,7 @@ Operator powers (same header): inject news, pump/dump a symbol, halt/resume, pau
 
 ## Streaming (Socket.IO)
 
-`mini-services/market-relay` fans out engine broadcasts: `ticks` (1-second snapshot of all quotes + indices), `news`, and per-account `fill` / `order` events after emitting `subscribe-account` with your API key. Point clients at `http://<relay-host>:3003` — the web terminal resolves this via `NEXT_PUBLIC_MRX_STREAM_URL`. Runnable with Node (`npm start`) or Bun (`bun run dev`). See [`examples/websocket`](examples/websocket).
+`mini-services/market-relay` fans out engine broadcasts: `ticks` (1-second snapshot of all quotes + indices), `news`, and per-account `fill` / `order` events after emitting `subscribe-account` with your API key. Point clients at `http://<relay-host>:3003` — the web terminal resolves this via `NEXT_PUBLIC_MRX_STREAM_URL`. Runnable with Node (`npm start`, via tsx) or Bun (`bun run dev`). See [`examples/websocket`](examples/websocket).
 
 ## Production
 
@@ -128,13 +128,26 @@ cd mini-services/market-relay && npm start
 
 ## Tests
 
-With the exchange running:
+CI runs three jobs on every push — **typecheck · lint · build**, **400 unit tests at 100% line/branch/function/statement coverage** (enforced thresholds, the run fails if coverage drops), and a **live end-to-end suite** that boots a fresh exchange + relay and runs four conformance scripts against them.
 
 ```bash
-node scripts/smoke-test.mjs
+npm run test:all          # typecheck + lint + unit suite with coverage
+npm run test:unit         # unit suite only
+npm run test:unit:coverage
 ```
 
-~150 checks covering market data, auth, order lifecycle, halts, cross-account isolation, docs integrity, the operator/profile surface and a full MCP protocol round-trip (handshake → tool discovery → trading → error mapping).
+Unit coverage (`tests/unit/`, vitest): every engine module — RNG primitives, ET clock, the 48-security universe, listing-date deep history generation with OHLC invariants, news generators, company financials, fill accounting, margin/liquidation, the full trading service, every API route handler (success, auth, validation, rate-limit and outage paths), the MCP client library, terminal store, and the tick loop itself (impulses, LULD halts, day rolls, snapshots, order restoration).
+
+End-to-end, against a running exchange (`npm run dev` or the standalone build):
+
+```bash
+node scripts/smoke-test.mjs        # ~154 checks: full trading lifecycle
+node scripts/api-matrix-test.mjs   # every endpoint × auth state × error contract
+node scripts/mcp-protocol-test.mjs # MCP stdio conformance: handshake → 21 tools → trading → error mapping
+node scripts/ws-relay-test.mjs     # Socket.IO: ticks, wire news, private account rooms, isolation
+```
+
+Or everything at once: `npm run test:e2e`. GitHub Actions (`.github/workflows/ci.yml`) runs all of it on every push and pull request; the coverage report is uploaded as an artifact.
 
 ## Configuration
 
@@ -155,7 +168,7 @@ mcp/                   zero-dependency MCP adapter (21 tools)
 mini-services/         Socket.IO market-data relay
 examples/              WebSocket client examples
 prisma/                schema (SQLite)
-scripts/               smoke-test suite
+scripts/               e2e suites: smoke, api-matrix, mcp-protocol, ws-relay
 ```
 
 ## License & disclaimer

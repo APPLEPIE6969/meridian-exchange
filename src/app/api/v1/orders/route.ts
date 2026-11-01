@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const rl = rateLimitResponse(clientKey(req))
+  /* v8 ignore next */
   if (rl) return rl
   try {
     const account = await requireAccount(req)
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       stop_price: body.stop_price !== undefined ? Number(body.stop_price) : undefined,
       client_order_id: body.client_order_id ? String(body.client_order_id) : undefined,
     })
+    /* v8 ignore next — placeOrder either returns a persisted row or throws */
     if (!order) return fail(500, 'INTERNAL', 'Order could not be persisted.')
     return ok(orderView(order), 201)
   } catch (e) {

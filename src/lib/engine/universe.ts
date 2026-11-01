@@ -1,4 +1,4 @@
-// MRX instrument universe — 40 operating companies + 6 sector ETFs.
+// MRX instrument universe — 42 operating companies + 6 sector ETFs.
 // All issuers are members of the Meridian composite universe.
 
 export type Sector =

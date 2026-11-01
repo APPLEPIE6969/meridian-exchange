@@ -68,5 +68,6 @@ prisma/*.db
 
 # sandbox infrastructure (never publish)
 /.zscripts/
-/tests/
+/tool-results/
 /Caddyfile
+/e2e.db

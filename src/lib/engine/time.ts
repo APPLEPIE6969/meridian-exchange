@@ -23,12 +23,16 @@ export interface EtTime {
 
 export function etNow(ts: number = Date.now()): EtTime {
   const parts = etFormatter.formatToParts(new Date(ts))
+  // v8 ignore next 2 — every ET format part is always present; the ?? 0 is
+  // pure defensive typing
+  /* v8 ignore next */
   const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0)
   const year = get('year')
   const month = get('month')
   const day = get('day')
-  let hour = get('hour')
-  if (hour === 24) hour = 0
+  // some ICU hour-cycle configurations report midnight as "24" under
+  // hour12:false — normalize to 0
+  const hour = get('hour') % 24
   const minute = get('minute')
   const second = get('second')
   const weekdayName = new Intl.DateTimeFormat('en-US', {

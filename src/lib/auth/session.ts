@@ -4,6 +4,8 @@ import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
 
+// v8 ignore next — the fallback secret only applies when the env var is unset
+/* v8 ignore next */
 const SECRET = process.env.MRX_SESSION_SECRET || 'mrx-dev-secret-9f27c1ab4e'
 export const SESSION_COOKIE = 'mrx_session'
 

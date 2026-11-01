@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "bun --hot index.ts",
-    "start": "node index.ts"
+    "dev": "tsx watch index.ts",
+    "start": "tsx index.ts"
   },
   "dependencies": {
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "tsx": "^4.19.2"
   }
 }
