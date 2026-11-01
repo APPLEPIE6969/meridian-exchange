@@ -87,14 +87,16 @@ jobs:
       - name: Create fresh exchange database
         run: npx prisma db push --accept-data-loss --skip-generate
         env:
-          DATABASE_URL: file:./e2e.db
+          # absolute path: the standalone server's Prisma client resolves
+          # relative SQLite URLs against its own directory, not the workspace
+          DATABASE_URL: file:${{ github.workspace }}/e2e.db
 
       - name: Production build
         run: npm run build
 
       - name: Start exchange server (standalone)
         run: |
-          DATABASE_URL="file:./e2e.db" NODE_ENV=production node .next/standalone/server.js &
+          DATABASE_URL="file:${{ github.workspace }}/e2e.db" NODE_ENV=production node .next/standalone/server.js &
           for i in $(seq 1 60); do
             if curl -sf http://localhost:3000/api/v1/market/status > /dev/null; then
               echo "exchange is up"

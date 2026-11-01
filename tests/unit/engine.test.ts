@@ -849,6 +849,19 @@ describe('snapshot boot path & persistence edges', () => {
     }
   })
 
+  it('broadcast marks the relay healthy on a 2xx response', async () => {
+    const origFetch = globalThis.fetch
+    globalThis.fetch = (async () => ({ ok: true, status: 200 })) as unknown as typeof fetch
+    try {
+      ;(E as { relayUp: boolean }).relayUp = true
+      ;(E.broadcastNow as (r: string, e: string, d: unknown) => void)('market', 'news', { healthy: true })
+      await new Promise((r) => setTimeout(r, 100))
+      expect((E as { relayUp: boolean }).relayUp).toBe(true)
+    } finally {
+      globalThis.fetch = origFetch
+    }
+  })
+
   it('the relay circuit breaker opens on failure and suppresses retries for 15s', async () => {
     const origFetch = globalThis.fetch
     globalThis.fetch = (async () => {
